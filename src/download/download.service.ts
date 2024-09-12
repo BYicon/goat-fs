@@ -1,0 +1,108 @@
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
+import { PUBLIC_VIDEO_PATH } from '@/shared/constant';
+
+@Injectable()
+export class DownloadService {
+  // 定义最大允许的视频大小 (以MB为单位)
+  private readonly MAX_VIDEO_SIZE_MB = 100;
+
+  async downloadVideo(
+    videoUrl: string,
+    userId: string,
+  ): Promise<{ url: string; size: number }> {
+    // 生成保存视频的文件路径
+    const videoDirectory = path.join(__dirname, '../public', 'videos');
+    if (!fs.existsSync(videoDirectory)) {
+      fs.mkdirSync(videoDirectory, { recursive: true });
+    }
+
+    const videoName = `${userId}_${Date.now()}.mp4`;
+    const videoPath = path.join(videoDirectory, videoName);
+
+    try {
+      // 先获取文件头信息，检查文件大小
+      const headResponse = await axios.head(videoUrl);
+      const contentLength = headResponse.headers['content-length'];
+
+      if (!contentLength) {
+        throw new HttpException(
+          'Could not retrieve video size',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const fileSizeInBytes = parseInt(contentLength, 10);
+      const fileSizeInMegabytes = fileSizeInBytes / (1024 * 1024);
+
+      // 如果文件大小超出限制，则抛出异常
+      if (fileSizeInMegabytes > this.MAX_VIDEO_SIZE_MB) {
+        throw new HttpException(
+          `Video exceeds size limit of ${this.MAX_VIDEO_SIZE_MB}MB`,
+          HttpStatus.PAYLOAD_TOO_LARGE,
+        );
+      }
+
+      // 开始下载视频
+      const response = await axios({
+        url: videoUrl,
+        method: 'GET',
+        responseType: 'stream',
+      });
+
+      const writer = fs.createWriteStream(videoPath);
+
+      // 将数据流写入文件系统
+      response.data.pipe(writer);
+
+      return new Promise((resolve, reject) => {
+        writer.on('finish', () => {
+          // 获取视频大小信息
+          const stats = fs.statSync(videoPath);
+          const fileSizeInBytes = stats.size;
+          const fileSizeInMegabytes = fileSizeInBytes / (1024 * 1024);
+
+          // 返回视频的URL和大小
+          const resData = {
+            url: `${PUBLIC_VIDEO_PATH}${videoName}`,
+            size: +fileSizeInMegabytes.toFixed(2),
+          };
+
+          // 解决Promise，并删除视频文件
+          resolve(resData);
+
+          this.scheduleVideoDeletion(videoPath); // 调用删除视频的方法
+        });
+
+        writer.on('error', (err) => {
+          reject(
+            new HttpException(
+              `File write error: ${err.message}`,
+              HttpStatus.INTERNAL_SERVER_ERROR,
+            ),
+          );
+        });
+      });
+    } catch (error) {
+      throw new HttpException(
+        `Download failed: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  private scheduleVideoDeletion(videoPath: string) {
+    // 删除视频文件的方法
+    setTimeout(() => {
+      fs.unlink(videoPath, (err) => {
+        if (err) {
+          console.error('Error deleting the video:', err);
+          return;
+        }
+        console.log('Video deleted successfully.');
+      });
+    }, 3600000); // 1小时后删除视频
+  }
+}
