@@ -1,8 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { DownloadService } from './download.service';
-import { getBaseUrl } from '@/shared/util';
-
-getBaseUrl();
 
 @Controller('download')
 export class DownloadController {
