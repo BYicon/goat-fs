@@ -1,8 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { DownloadService } from './download.service';
-import { getBaseUrl } from '@/shared/util';
-
-getBaseUrl();
 
 @Controller('download')
 export class DownloadController {
@@ -10,10 +7,8 @@ export class DownloadController {
   @Get('video')
   async downloadVideo(@Query() query: any) {
     const url = decodeURIComponent(query.url);
-    const resData = await this.videoDownloadService.downloadVideo(
-      url,
-      query.userid,
-    );
+    const userId = query.userid || '123456';
+    const resData = await this.videoDownloadService.downloadVideo(url, userId);
     return { ...resData };
   }
 }

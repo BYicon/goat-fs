@@ -2,12 +2,19 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PUBLIC_VIDEO_PATH } from '@/shared/constant';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class DownloadService {
   // 定义最大允许的视频大小 (以MB为单位)
   private readonly MAX_VIDEO_SIZE_MB = 100;
+
+  downloadPath: string;
+
+  constructor(private configService: ConfigService) {
+    const baseUrl = this.configService.get('BASE_URL');
+    this.downloadPath = `${baseUrl}/videos`;
+  }
 
   async downloadVideo(
     videoUrl: string,
@@ -59,6 +66,7 @@ export class DownloadService {
 
       return new Promise((resolve, reject) => {
         writer.on('finish', () => {
+          writer.end(); // 文件流的关闭，防止文件一直被占用。
           // 获取视频大小信息
           const stats = fs.statSync(videoPath);
           const fileSizeInBytes = stats.size;
@@ -66,14 +74,12 @@ export class DownloadService {
 
           // 返回视频的URL和大小
           const resData = {
-            url: `${PUBLIC_VIDEO_PATH}${videoName}`,
+            url: `${this.downloadPath}/${videoName}`,
             size: +fileSizeInMegabytes.toFixed(2),
           };
-
+          console.log('Video download successfully.');
           // 解决Promise，并删除视频文件
           resolve(resData);
-
-          this.scheduleVideoDeletion(videoPath); // 调用删除视频的方法
         });
 
         writer.on('error', (err) => {
@@ -83,6 +89,11 @@ export class DownloadService {
               HttpStatus.INTERNAL_SERVER_ERROR,
             ),
           );
+        });
+
+        writer.on('close', () => {
+          // 确保文件已经关闭
+          this.scheduleVideoDeletion(videoPath);
         });
       });
     } catch (error) {
