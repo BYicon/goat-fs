@@ -9,7 +9,7 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, '.', 'public'));
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT') || 3000;
+  const port = configService.get<number>('PORT') || 6003; // TODO
   const baseUrl = configService.get<number>('BASE_URL');
   await app.listen(port);
   const orangeColor = '\u001b[38;5;214m'; // orange color
@@ -18,7 +18,7 @@ async function bootstrap() {
     console.log(
       `\u001b]8;;${baseUrl}:${port}\u0007${orangeColor}${baseUrl}:${port}${resetColor}\u001b]8;;\u0007`,
     );
-  } else {
+  } else if (process.env.NODE_ENV === 'production') {
     console.log(`listen on ${port}`);
   }
 }
