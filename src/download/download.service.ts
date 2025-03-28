@@ -66,19 +66,17 @@ export class DownloadService {
 
       return new Promise((resolve, reject) => {
         writer.on('finish', () => {
-          writer.end(); // 文件流的关闭，防止文件一直被占用。
+          writer.end(); // 🟣🟣🟣文件流的关闭，防止文件一直被占用。
           // 获取视频大小信息
           const stats = fs.statSync(videoPath);
           const fileSizeInBytes = stats.size;
           const fileSizeInMegabytes = fileSizeInBytes / (1024 * 1024);
 
-          // 返回视频的URL和大小
           const resData = {
             url: `${this.downloadPath}/${videoName}`,
             size: +fileSizeInMegabytes.toFixed(2),
           };
           console.log('Video download successfully.');
-          // 解决Promise，并删除视频文件
           resolve(resData);
         });
 
@@ -92,7 +90,6 @@ export class DownloadService {
         });
 
         writer.on('close', () => {
-          // 确保文件已经关闭
           this.scheduleVideoDeletion(videoPath);
         });
       });
