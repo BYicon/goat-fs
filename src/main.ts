@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.useStaticAssets(join(__dirname, '.', 'public'));
+  app.useStaticAssets(join(__dirname, 'public'));
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT') || 6003; // TODO
