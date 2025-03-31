@@ -11,6 +11,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT') || 6003; // TODO
   const baseUrl = configService.get<number>('BASE_URL');
+  console.log('baseUrl 🔵🔵🔵', baseUrl);
   await app.listen(port);
   const orangeColor = '\u001b[38;5;214m'; // orange color
   const resetColor = '\u001b[0m'; // reset color

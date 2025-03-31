@@ -168,7 +168,7 @@ export class DownloadService {
 
     if (fileSizeInMegabytes > maxSize) {
       throw new HttpException(
-        `文件大小超过限制 ${maxSize}MB`,
+        `文件大小(${fileSizeInMegabytes.toFixed(2)}MB)超过限制 ${maxSize}MB`,
         HttpStatus.PAYLOAD_TOO_LARGE,
       );
     }
@@ -235,7 +235,11 @@ export class DownloadService {
       }
 
       this.validateFileFormat(fileExtension, type);
-      await this.validateFileSize(fileUrl, type);
+      const fileSizeInMBResult = await this.validateFileSize(fileUrl, type).catch((error) => {
+        console.error('文件大小验证失败: 🔴🔴🔴', error);
+        throw error;
+      });
+      console.log('文件大小: 🔵🔵🔵', fileSizeInMBResult, 'MB');
 
       const fileName = `${namePrefix}_${Date.now()}${fileExtension}`;
       const subDir = type === 'video' ? 'videos' : 'images';
