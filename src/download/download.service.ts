@@ -62,20 +62,40 @@ export class DownloadService {
     }
   }
 
-  private validateFileFormat(
-    fileExtension: string,
+  private resolveFileExtension(
+    fileUrl: string,
     type: 'video' | 'image',
-  ): void {
+  ): string {
     const supportedFormats =
       type === 'video'
         ? this.SUPPORTED_VIDEO_FORMATS
         : this.SUPPORTED_IMAGE_FORMATS;
+    const defaultExtension = type === 'video' ? '.mp4' : '.jpg';
 
-    if (!supportedFormats.includes(fileExtension)) {
-      throw new HttpException(
-        `不支持的${type === 'video' ? '视频' : '图片'}格式。支持的格式：${supportedFormats.join(', ')}`,
-        HttpStatus.BAD_REQUEST,
-      );
+    try {
+      const url = new URL(fileUrl);
+      const pathname = url.pathname;
+      const ext = path.extname(pathname).toLowerCase();
+
+      if (!ext) {
+        // 对于无后缀的文件，使用默认后缀并允许下载
+        return defaultExtension;
+      }
+
+      if (!supportedFormats.includes(ext)) {
+        throw new HttpException(
+          `不支持的${type === 'video' ? '视频' : '图片'}格式。支持的格式：${supportedFormats.join(', ')}`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return ext;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      // 如果 URL 解析失败，回退到默认后缀
+      return defaultExtension;
     }
   }
 
@@ -219,23 +239,11 @@ export class DownloadService {
   ): Promise<{ url: string; size: number }> {
     try {
       console.log('开始下载文件: 🔵🔵🔵', fileUrl);
-      let fileExtension = '';
-      try {
-        const url = new URL(fileUrl);
-        const pathname = url.pathname;
-        const fileName = pathname.split('/').pop() || '';
-        fileExtension =
-          fileName.split('.').length > 1
-            ? '.' + fileName.split('.')[1].toLowerCase()
-            : type === 'video'
-              ? '.mp4'
-              : '.jpg';
-      } catch (error) {
-        fileExtension = type === 'video' ? '.mp4' : '.jpg';
-      }
-
-      this.validateFileFormat(fileExtension, type);
-      const fileSizeInMBResult = await this.validateFileSize(fileUrl, type).catch((error) => {
+      const fileExtension = this.resolveFileExtension(fileUrl, type);
+      const fileSizeInMBResult = await this.validateFileSize(
+        fileUrl,
+        type,
+      ).catch((error) => {
         console.error('文件大小验证失败: 🔴🔴🔴', error);
         throw error;
       });
