@@ -62,6 +62,41 @@ export class DownloadService {
     }
   }
 
+  private getExtensionFromContentType(
+    contentType: string,
+    type: 'video' | 'image',
+  ): string | null {
+    if (!contentType) {
+      return null;
+    }
+
+    // 视频格式映射
+    const videoTypeMap: Record<string, string> = {
+      'video/mp4': '.mp4',
+      'video/webm': '.webm',
+      'video/quicktime': '.mov',
+      'video/x-msvideo': '.avi',
+      'video/x-matroska': '.mkv',
+    };
+
+    // 图片格式映射
+    const imageTypeMap: Record<string, string> = {
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+    };
+
+    const typeMap = type === 'video' ? videoTypeMap : imageTypeMap;
+    const normalizedContentType = contentType
+      .toLowerCase()
+      .split(';')[0]
+      .trim();
+
+    return typeMap[normalizedContentType] || null;
+  }
+
   private resolveFileExtension(
     fileUrl: string,
     type: 'video' | 'image',
@@ -102,7 +137,7 @@ export class DownloadService {
   private async validateFileSize(
     url: string,
     type: 'video' | 'image',
-  ): Promise<number> {
+  ): Promise<{ size: number; extension: string | null; contentType: string }> {
     try {
       // 添加请求头，模拟浏览器请求
       const headers = {
@@ -114,18 +149,23 @@ export class DownloadService {
         'Cache-Control': 'no-cache',
       };
 
+      let contentLength: string;
+      let contentType: string;
+
       // 首先尝试 HEAD 请求
       try {
         const headResponse = await axios.head(url, { headers });
-        const contentLength = headResponse.headers['content-length'];
-        const contentType = headResponse.headers['content-type'];
+        contentLength = headResponse.headers['content-length'];
+        contentType = headResponse.headers['content-type'];
 
         if (contentLength && contentType) {
-          return this.validateContentTypeAndSize(
+          const size = this.validateContentTypeAndSize(
             contentLength,
             contentType,
             type,
           );
+          const extension = this.getExtensionFromContentType(contentType, type);
+          return { size, extension, contentType };
         }
       } catch (error) {
         console.log('HEAD 请求失败，尝试 GET 请求');
@@ -138,14 +178,20 @@ export class DownloadService {
         maxContentLength: Infinity,
       });
 
-      const contentLength = response.headers['content-length'];
-      const contentType = response.headers['content-type'];
+      contentLength = response.headers['content-length'];
+      contentType = response.headers['content-type'];
 
       if (!contentLength) {
         throw new HttpException('无法获取文件大小', HttpStatus.BAD_REQUEST);
       }
 
-      return this.validateContentTypeAndSize(contentLength, contentType, type);
+      const size = this.validateContentTypeAndSize(
+        contentLength,
+        contentType,
+        type,
+      );
+      const extension = this.getExtensionFromContentType(contentType, type);
+      return { size, extension, contentType };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -239,20 +285,29 @@ export class DownloadService {
   ): Promise<{ url: string; size: number }> {
     try {
       console.log('开始下载文件: 🔵🔵🔵', fileUrl);
-      const fileExtension = this.resolveFileExtension(fileUrl, type);
-      const fileSizeInMBResult = await this.validateFileSize(
-        fileUrl,
-        type,
-      ).catch((error) => {
-        console.error('文件大小验证失败: 🔴🔴🔴', error);
-        throw error;
-      });
-      console.log('文件大小: 🔵🔵🔵', fileSizeInMBResult, 'MB');
+
+      // 验证文件大小并获取Content-Type信息
+      const validationResult = await this.validateFileSize(fileUrl, type).catch(
+        (error) => {
+          console.error('文件大小验证失败: 🔴🔴🔴', error);
+          throw error;
+        },
+      );
+
+      console.log('文件大小: 🔵🔵🔵', validationResult.size, 'MB');
+      console.log('Content-Type: 🔵🔵🔵', validationResult.contentType);
+
+      // 优先使用Content-Type确定的扩展名，否则回退到URL解析
+      let fileExtension = validationResult.extension;
+      if (!fileExtension) {
+        console.log('无法从Content-Type确定扩展名，尝试从URL解析');
+        fileExtension = this.resolveFileExtension(fileUrl, type);
+      }
+      console.log('使用文件扩展名: 🔵🔵🔵', fileExtension);
 
       const fileName = `${namePrefix}_${Date.now()}${fileExtension}`;
       const subDir = type === 'video' ? 'videos' : 'images';
       const filePath = path.join(this.baseDirectory, subDir, fileName);
-
 
       const fileSizeInMB = await this.downloadAndSaveFile(fileUrl, filePath);
       console.log('文件下载完成，大小: 🟢🟢🟢', fileSizeInMB, 'MB');
